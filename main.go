@@ -1,14 +1,14 @@
 package main
 
 import (
+    "context"
     "fmt"
     "log"
     "net/http"
     "github.com/gin-gonic/gin"
     "github.com/joho/godotenv"
-    "gorm.io/gorm"
-    "gorm.io/driver/postgres"
-    "gorm.io/gorm/logger"
+    "go.mongodb.org/mongo-driver/mongo"
+    "go.mongodb.org/mongo-driver/bson"
     "mobilerecharge/models"
     "mobilerecharge/handlers"
     "mobilerecharge/config"
@@ -28,6 +28,16 @@ func authRequired(c *gin.Context) {
 }
 
 func main() {
+    // Initialize MongoDB connection
+    config.ConnectDB()
+    
+    // Disconnect when the main function exits
+    defer func() {
+        if err := config.MongoClient.Disconnect(context.Background()); err != nil {
+            log.Fatal(err)
+        }
+    }()
+
     // Load .env file
     if err := godotenv.Load(); err != nil {
         log.Printf("Warning: .env file not found")
@@ -36,32 +46,28 @@ func main() {
     // Set Gin to release mode before creating the engine
     gin.SetMode(gin.ReleaseMode)
 
-    // Initialize database
-    dsn := config.GetDBConfig()
-    db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-        Logger: logger.Default.LogMode(logger.Info),
-    })
-    if err != nil {
-        panic("failed to connect database: " + err.Error())
-    }
-    
-    // Migrate the schema
-    db.AutoMigrate(&models.Sim{}, &models.User{})  // Combine migrations
-    
+    // Initialize MongoDB client
+    db := config.MongoClient.Database("sim_render")
+
     // Create default admin user if not exists
+    usersCollection := db.Collection("users")
     var adminUser models.User
-    if db.Where("username = ?", "admin69").First(&adminUser).Error != nil {
-        db.Create(&models.User{
+    err := usersCollection.FindOne(context.Background(), bson.M{"username": "admin69"}).Decode(&adminUser)
+    if err == mongo.ErrNoDocuments {
+        _, err := usersCollection.InsertOne(context.Background(), models.User{
             Username: "admin69",
             Password: "696969",
         })
+        if err != nil {
+            log.Printf("Error creating admin user: %v", err)
+        }
     }
 
-    // Initialize handler
-    h := handlers.NewHandler(db)
+    // Initialize handler with MongoDB
+    h := handlers.NewMongoHandler(db)
 
-    // Initialize notification service
-    notificationService := services.NewNotificationService(db)
+    // Initialize notification service with MongoDB
+    notificationService := services.NewNotificationService(db)  // Changed from NewMongoNotificationService
 
     // Start notification checker in a goroutine
     go func() {
@@ -97,15 +103,12 @@ func main() {
 
     // Health check endpoint
     r.GET("/health", func(c *gin.Context) {
-        // Check database connection
-        sqlDB, err := db.DB()
-        if err != nil {
-            c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "message": "Database connection error"})
-            return
-        }
+        // Check MongoDB connection
+        ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+        defer cancel()
         
-        // Ping database
-        if err := sqlDB.Ping(); err != nil {
+        err := db.Client().Ping(ctx, nil)
+        if err != nil {
             c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "message": "Database ping failed"})
             return
         }
@@ -116,9 +119,9 @@ func main() {
     // Add check-user endpoint before protected routes
     r.GET("/api/check-user", func(c *gin.Context) {
         var user models.User
-        result := db.Where("username = ?", "admin69").First(&user)
-        if result.Error != nil {
-            c.JSON(http.StatusNotFound, gin.H{"error": "User not found", "details": result.Error.Error()})
+        err := db.Collection("users").FindOne(context.Background(), bson.M{"username": "admin69"}).Decode(&user)
+        if err != nil {
+            c.JSON(http.StatusNotFound, gin.H{"error": "User not found", "details": err.Error()})
             return
         }
         c.JSON(http.StatusOK, gin.H{"message": "User exists", "username": user.Username})

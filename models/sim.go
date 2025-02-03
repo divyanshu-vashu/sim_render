@@ -1,13 +1,26 @@
 package models
 
-import "time"
+import (
+    "go.mongodb.org/mongo-driver/bson/primitive"
+    // "time"
+)
+
+// type Sim struct {
+//     ID                   primitive.ObjectID `bson:"_id,omitempty" json:"_id,omitempty"`
+//     Name                 string             `bson:"name" json:"name"`
+//     Number               string             `bson:"number" json:"number"`
+//     LastRechargeDate     string             `bson:"last_recharge_date" json:"last_recharge_date"`
+//     RechargeValidity     string             `bson:"recharge_validity" json:"recharge_validity"`
+//     IncomingCallValidity string             `bson:"incoming_call_validity" json:"incoming_call_validity"`
+//     SimExpiry            string             `bson:"sim_expiry" json:"sim_expiry"`
+// }
 
 type Sim struct {
-    ID                    uint      `json:"id" gorm:"primaryKey"`
-    Name                  string    `json:"name"`
-    Number               string    `json:"number"`
-    LastRechargeDate     time.Time `json:"last_recharge_date"`
-    RechargeValidity     time.Time `json:"recharge_validity"`
-    IncomingCallValidity time.Time `json:"incoming_call_validity" gorm:"column:incoming_validity"` // Fix column name
-    SimExpiry            time.Time `json:"sim_expiry"`
+    ID                   primitive.ObjectID `bson:"_id,omitempty" json:"_id,omitempty"`
+    Name                 string             `bson:"name" json:"name"`
+    Number               string             `bson:"number" json:"number"`
+    LastRechargeDate     string             `bson:"last_recharge_date" json:"last_recharge_date"`
+    RechargeValidity     string             `bson:"recharge_validity" json:"recharge_validity"`
+    IncomingCallValidity string             `bson:"incoming_call_validity" json:"incoming_call_validity"`
+    SimExpiry            string             `bson:"sim_expiry" json:"sim_expiry"`
 }
