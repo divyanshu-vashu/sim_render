@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: mobilerecharge
+    env: docker
+    region: singapore
+    plan: free
+    healthCheckPath: /health
+    buildCommand: docker build -t mobilerecharge .
+    startCommand: ./mobilerecharge
+    envVars:
+      - key: PORT
+        value: 8080
